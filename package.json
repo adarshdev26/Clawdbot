@@ -1,5 +1,5 @@
 {
-  "name": "Clawdbot",
+  "name": "clawdbot",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "force": "^0.0.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },

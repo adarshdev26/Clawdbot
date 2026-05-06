@@ -1,30 +1,31 @@
 import { useState } from "react";
+import {
+  Wallet,
+  Shield,
+  PenSquare,
+  Lock,
+  User,
+  KeyRound,
+  ChevronRight,
+} from "lucide-react";
 
 export default function AuthWorkerUI() {
   const [wallet, setWallet] = useState("");
   const [nonce, setNonce] = useState("");
   const [token, setToken] = useState("");
 
- const API_URL = import.meta.env.VITE_API_URL;
+  const API_URL = import.meta.env.VITE_API_URL;
 
   const connectWallet = async () => {
-    if (!window.ethereum) {
-      alert("MetaMask not found");
-      return;
-    }
-
+    if (!window.ethereum) return alert("MetaMask not found");
     const accounts = await window.ethereum.request({
       method: "eth_requestAccounts",
     });
-
     setWallet(accounts[0]);
   };
 
   const getChallenge = async () => {
-    const res = await fetch(
-      `${API_URL}/challenge?address=${wallet}&chainId=1`
-    );
-
+    const res = await fetch(`${API_URL}/challenge?address=${wallet}&chainId=1`);
     const data = await res.json();
     setNonce(data.nonce);
   };
@@ -37,9 +38,7 @@ export default function AuthWorkerUI() {
 
     const res = await fetch(`${API_URL}/login`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         address: wallet,
         signature,
@@ -49,7 +48,9 @@ export default function AuthWorkerUI() {
     });
 
     const data = await res.json();
-
+    if(data.error){
+      alert(data.error)
+    }
     if (data.token) {
       localStorage.setItem("token", data.token);
       setToken(data.token);
@@ -58,63 +59,162 @@ export default function AuthWorkerUI() {
 
   const accessProtected = async () => {
     const savedToken = localStorage.getItem("token");
-
-    if (!savedToken) {
-      alert("Login first");
-      return;
-    }
+    if (!savedToken) return alert("Login first");
 
     const res = await fetch(`${API_URL}/protected`, {
-      method: "GET",
       headers: {
         Authorization: `Bearer ${savedToken}`,
       },
       redirect: "follow",
     });
 
-    if (res.redirected) {
-      window.location.href = res.url;
-    }
+    if (res.redirected) window.location.href = res.url;
   };
 
+  const topSteps = [
+    {
+      icon: Wallet,
+      title: "Connect Wallet",
+      desc: "Connect your MetaMask wallet",
+    },
+    {
+      icon: Shield,
+      title: "Get Challenge",
+      desc: "Request a unique signing challenge",
+    },
+    {
+      icon: PenSquare,
+      title: "Sign & Login",
+      desc: "Sign the challenge and login",
+    },
+    {
+      icon: Lock,
+      title: "Access Protected",
+      desc: "Access your protected resources",
+    },
+  ];
+
+  const cards = [
+    {
+      title: "Connect MetaMask",
+      desc: "Connect your wallet to get started",
+      icon: Wallet,
+      action: connectWallet,
+      glow: "from-purple-500/30 to-purple-900/10",
+    },
+    {
+      title: "Get Challenge",
+      desc: "Get a unique challenge to sign",
+      icon: Shield,
+      action: getChallenge,
+      glow: "from-blue-500/30 to-blue-900/10",
+    },
+    {
+      title: "Sign & Login",
+      desc: "Sign the challenge to authenticate",
+      icon: PenSquare,
+      action: signAndLogin,
+      glow: "from-green-500/30 to-green-900/10",
+    },
+    {
+      title: "Open Protected Route",
+      desc: "Access your protected resources",
+      icon: Lock,
+      action: accessProtected,
+      glow: "from-pink-500/30 to-pink-900/10",
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 shadow-2xl">
-        <h1 className="text-2xl font-semibold mb-6">Web3 Wallet Login</h1>
+    <div className="min-h-screen bg-[#040714] text-white px-6 py-12">
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center px-6 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-xl text-sm text-zinc-300 mb-8">
+            Secure • Decentralized • Privacy First
+          </div>
 
-        <div className="space-y-4">
-          <button
-            onClick={connectWallet}
-            className="w-full rounded-2xl px-4 py-3 bg-white text-black font-medium"
-          >
-            Connect MetaMask
-          </button>
+          <h1 className="text-7xl font-bold leading-tight bg-gradient-to-r from-purple-500 via-white to-blue-400 bg-clip-text text-transparent">
+            Web3 Wallet Login
+          </h1>
 
-          <button
-            onClick={getChallenge}
-            className="w-full rounded-2xl px-4 py-3 bg-blue-600 font-medium"
-          >
-            Get Challenge
-          </button>
-
-          <button
-            onClick={signAndLogin}
-            className="w-full rounded-2xl px-4 py-3 bg-green-600 font-medium"
-          >
-            Sign & Login
-          </button>
-          <button
-            onClick={accessProtected}
-            className="w-full rounded-2xl px-4 py-3 bg-purple-600 font-medium"
-          >
-            Open Protected Route
-          </button>
+          <p className="text-zinc-400 mt-5 text-xl">
+            Sign in with your wallet. No passwords. Just you.
+          </p>
         </div>
 
-        <div className="mt-6 rounded-2xl bg-white/5 p-4 text-sm space-y-2 break-all">
-          <p><strong>Wallet:</strong> {wallet || "Not connected"}</p>
-          <p><strong>Nonce:</strong> {nonce || "Pending"}</p>
-          <p><strong>JWT:</strong> {token ? `${token.slice(0, 30)}...` : "Not issued"}</p>
+        <div className="grid md:grid-cols-4 gap-6 mb-10">
+          {topSteps.map((step, i) => {
+            const Icon = step.icon;
+            return (
+              <div
+                key={i}
+                className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-xl p-8 text-center"
+              >
+                <div className="w-20 h-20 mx-auto rounded-full border border-white/20 bg-white/5 flex items-center justify-center mb-5 shadow-lg">
+                  <Icon size={28} />
+                </div>
+                <h3 className="font-semibold text-lg">{step.title}</h3>
+                <p className="text-zinc-400 text-sm mt-3">{step.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {cards.map((card, i) => {
+            const Icon = card.icon;
+            return (
+              <button
+                key={i}
+                onClick={card.action}
+                className={`rounded-[28px] border border-white/10 bg-gradient-to-b ${card.glow} p-8 text-left backdrop-blur-xl hover:scale-105 transition-all duration-300`}
+              >
+                <div className="w-20 h-20 rounded-full bg-white/10 border border-white/10 flex items-center justify-center mb-6">
+                  <Icon size={28} />
+                </div>
+
+                <h3 className="text-xl font-semibold mb-3">{card.title}</h3>
+                <p className="text-zinc-400 text-sm mb-6">{card.desc}</p>
+
+                <div className="flex items-center justify-between rounded-xl border border-white/10 px-4 py-3 bg-white/5">
+                  <span>Continue</span>
+                  <ChevronRight size={18} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-xl p-8">
+          <h2 className="text-2xl font-semibold mb-8">Authentication Status</h2>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { label: "Wallet", value: wallet || "Not connected", icon: User },
+              { label: "Nonce", value: nonce || "Pending", icon: Shield },
+              {
+                label: "JWT Token",
+                value: token ? `${token.slice(0, 30)}...` : "Not issued",
+                icon: KeyRound,
+              },
+            ].map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-5"
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                      <Icon size={18} />
+                    </div>
+                    <span>{item.label}</span>
+                  </div>
+                  <p className="text-zinc-400 text-sm break-all">{item.value}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

@@ -27,6 +27,9 @@ export default function AuthWorkerUI() {
   const getChallenge = async () => {
     const res = await fetch(`${API_URL}/challenge?address=${wallet}&chainId=1`);
     const data = await res.json();
+    if (data.error) {
+      alert(data.error);
+    }
     setNonce(data.nonce);
   };
 
@@ -48,8 +51,8 @@ export default function AuthWorkerUI() {
     });
 
     const data = await res.json();
-    if(data.error){
-      alert(data.error)
+    if (data.error) {
+      alert(data.error);
     }
     if (data.token) {
       localStorage.setItem("token", data.token);
@@ -57,19 +60,33 @@ export default function AuthWorkerUI() {
     }
   };
 
-  const accessProtected = async () => {
-    const savedToken = localStorage.getItem("token");
-    if (!savedToken) return alert("Login first");
+const accessProtected = async () => {
+  const savedToken = localStorage.getItem("token");
 
-    const res = await fetch(`${API_URL}/protected`, {
-      headers: {
-        Authorization: `Bearer ${savedToken}`,
-      },
-      redirect: "follow",
-    });
+  if (!savedToken) {
+    alert("Login first");
+    return;
+  }
 
-    if (res.redirected) window.location.href = res.url;
-  };
+  const res = await fetch(`${API_URL}/protected`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${savedToken}`,
+    },
+  });
+
+  const data = await res.json();
+
+  if (data.hasMinimumBalance !== undefined) {
+    alert(
+      `Balance: ${data.balance}\nMinimum Required: ${data.minimumRequired}\nAccess: ${
+        data.hasMinimumBalance ? "Granted" : "Denied"
+      }`
+    );
+  } else {
+    alert(data.error || "Failed");
+  }
+};
 
   const topSteps = [
     {
@@ -210,7 +227,9 @@ export default function AuthWorkerUI() {
                     </div>
                     <span>{item.label}</span>
                   </div>
-                  <p className="text-zinc-400 text-sm break-all">{item.value}</p>
+                  <p className="text-zinc-400 text-sm break-all">
+                    {item.value}
+                  </p>
                 </div>
               );
             })}

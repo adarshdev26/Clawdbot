@@ -88,6 +88,63 @@ const accessProtected = async () => {
   }
 };
 
+
+const createJob = async () => {
+  const savedToken = localStorage.getItem("token");
+  if (!savedToken) { alert("Login first"); return; }
+
+  const res = await fetch(`${API_URL}/job/create`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${savedToken}` },
+  });
+
+  const data = await res.json();
+
+  if (data.error) { alert(data.error); return; }
+
+  // Pehle user ko payment info dikhao
+  alert(
+    `Job Created!\n\nCost: ${data.cost} ${data.token}\nNetwork: ${data.network}\nPay To: ${data.payTo}\nExpires In: ${data.expiresIn} seconds`
+  );
+
+  // Phir polling shuru karo
+  await pollPayment(data.jobId);
+};
+
+const checkJobStatus = async (jobId) => {
+  const res = await fetch(
+    `${API_URL}/job/status/${jobId}`
+  );
+
+  const data = await res.json();
+
+};
+
+const pollPayment = async (jobId) => {
+  const interval = setInterval(async () => {
+    const res = await fetch(`${API_URL}/job/check-payment/${jobId}`, {
+      method: "POST",
+    });
+
+    const data = await res.json();
+    console.log("payment status", data);
+
+    if (data.status === "paid") {
+      clearInterval(interval);
+      alert(`✅ Payment received!\nTx: ${data.txHash}`);
+    }
+
+    if (data.status === "expired") {
+      clearInterval(interval);
+      alert("❌ Payment expired");
+    }
+
+    if (data.error) {
+      clearInterval(interval);
+      alert(`Error: ${data.error}`);
+    }
+  }, 5000);
+};
   const topSteps = [
     {
       icon: Wallet,
@@ -140,6 +197,13 @@ const accessProtected = async () => {
       action: accessProtected,
       glow: "from-pink-500/30 to-pink-900/10",
     },
+    {
+  title: "Create Job",
+  desc: "Create payment job session",
+  icon: Wallet,
+  action: createJob,
+  glow: "from-orange-500/30 to-orange-900/10",
+},
   ];
 
   return (

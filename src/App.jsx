@@ -14,11 +14,11 @@ import VerifyModal from "./components/VerifyModal";
 export default function AuthWorkerUI() {
   const [wallet, setWallet] = useState("");
   const [nonce, setNonce] = useState("");
+  const [nonceId, setNonceId] = useState("");
   const [token, setToken] = useState("");
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
-
   const connectWallet = async () => {
     if (!window.ethereum) return alert("MetaMask not found");
     const accounts = await window.ethereum.request({
@@ -27,16 +27,26 @@ export default function AuthWorkerUI() {
     setWallet(accounts[0]);
   };
 
-  const getChallenge = async () => {
+const getChallenge = async () => {
+  try {
     const res = await fetch(`${API_URL}/challenge?address=${wallet}`);
+
     const data = await res.json();
+
     if (data.error) {
       alert(data.error);
+      return;
     }
-    setNonce(data.nonce);
-  };
 
-  const signAndLogin = async () => {
+    setNonce(data.nonce);
+    setNonceId(data.nonceId);
+  } catch (err) {
+    console.error(err);
+    alert("Challenge request failed");
+  }
+};
+const signAndLogin = async () => {
+  try {
     const signature = await window.ethereum.request({
       method: "personal_sign",
       params: [nonce, wallet],
@@ -44,23 +54,35 @@ export default function AuthWorkerUI() {
 
     const res = await fetch(`${API_URL}/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         address: wallet,
         signature,
         nonce,
+        nonceId,
       }),
     });
 
     const data = await res.json();
+
     if (data.error) {
       alert(data.error);
+      return;
     }
+
     if (data.token) {
       localStorage.setItem("token", data.token);
       setToken(data.token);
+
+      alert("✅ Login successful");
     }
-  };
+  } catch (err) {
+    console.error(err);
+    alert("Login failed");
+  }
+};
 
   const accessProtected = async (verifyData) => {
     const savedToken = localStorage.getItem("token");

@@ -48,7 +48,7 @@ export default function AuthWorkerUI() {
       body: JSON.stringify({
         address: wallet,
         signature,
-        nonce
+        nonce,
       }),
     });
 
@@ -62,128 +62,144 @@ export default function AuthWorkerUI() {
     }
   };
 
-const accessProtected = async (verifyData) => {
-  const savedToken = localStorage.getItem("token");
+  const accessProtected = async (verifyData) => {
+    const savedToken = localStorage.getItem("token");
 
-  if (!savedToken) {
-    alert("Login first");
-    return;
-  }
+    if (!savedToken) {
+      alert("Login first");
+      return;
+    }
 
-  const res = await fetch(`${API_URL}/verify`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${savedToken}`,
-    },
-    body: JSON.stringify(verifyData),
-  });
+    const res = await fetch(`${API_URL}/verify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${savedToken}`,
+      },
+      body: JSON.stringify(verifyData),
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (data.hasMinimumBalance !== undefined) {
-    alert(`
+    if (data.hasMinimumBalance !== undefined) {
+      alert(`
 Balance: ${data.balance}
 
 Minimum Required: ${data.minimumRequired}
 
 Access: ${data.hasMinimumBalance ? "Granted" : "Denied"}
 `);
-  } else {
-    alert(data.error || "Failed");
-  }
-};
+    } else {
+      alert(data.error || "Failed");
+    }
+  };
 
-const createInvoice = async (invoiceData) => {
-  const savedToken = localStorage.getItem("token");
+  const checkJobStatus = async (jobId) => {
+    try {
+      const res = await fetch(`${API_URL}/job/status/${jobId}`);
 
-  if (!savedToken) {
-    alert("Login first");
-    return;
-  }
+      const data = await res.json();
 
-  const res = await fetch(`${API_URL}/invoice`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${savedToken}`,
-    },
-    body: JSON.stringify(invoiceData),
-  });
+      console.log("job status", data);
 
-  const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-  if (data.error) {
-    alert(data.error);
-    return;
-  }
+  const pollPayment = async (jobId) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_URL}/receipt/${jobId}`, {
+          method: "POST",
+        });
 
-  alert(`
-Invoice Created
+        const data = await res.json();
 
-Job ID: ${data.jobId}
-Cost: ${data.cost}
+        console.log("receipt response", data);
+
+        if (data.status === "paid") {
+          clearInterval(interval);
+
+          alert(`
+✅ Payment Received
+
+TX HASH:
+${data.txHash}
+`);
+        }
+
+        if (data.status === "expired") {
+          clearInterval(interval);
+
+          alert("❌ Invoice expired");
+        }
+
+        if (data.error) {
+          clearInterval(interval);
+
+          alert(data.error);
+        }
+      } catch (err) {
+        clearInterval(interval);
+
+        console.error(err);
+
+        alert("Polling failed");
+      }
+    }, 5000);
+  };
+
+  const createInvoice = async (invoiceData) => {
+    const savedToken = localStorage.getItem("token");
+
+    if (!savedToken) {
+      alert("Login first");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/invoice`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${savedToken}`,
+        },
+        body: JSON.stringify(invoiceData),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      alert(`
+✅ Invoice Created
+
+Job ID:
+${data.jobId}
+
+Cost:
+${data.cost}
+
+Expires:
+${data.expiresIn}s
 `);
 
-  pollPayment(data.jobId);
-};
+      // optional
+      await checkJobStatus(data.jobId);
 
-const createJob = async () => {
-  const savedToken = localStorage.getItem("token");
-  if (!savedToken) { alert("Login first"); return; }
+      // start payment polling
+      pollPayment(data.jobId);
+    } catch (err) {
+      console.error(err);
 
-  const res = await fetch(`${API_URL}/job/create`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${savedToken}` },
-  });
-
-  const data = await res.json();
-
-  if (data.error) { alert(data.error); return; }
-
-  // Pehle user ko payment info dikhao
-  alert(
-    `Job Created!\n\nCost: ${data.cost} ${data.token}\nNetwork: ${data.network}\nPay To: ${data.payTo}\nExpires In: ${data.expiresIn} seconds`
-  );
-
-  // Phir polling shuru karo
-  await pollPayment(data.jobId);
-};
-
-const checkJobStatus = async (jobId) => {
-  const res = await fetch(
-    `${API_URL}/job/status/${jobId}`
-  );
-
-  const data = await res.json();
-
-};
-
-const pollPayment = async (jobId) => {
-  const interval = setInterval(async () => {
-    const res = await fetch(`${API_URL}/job/check-payment/${jobId}`, {
-      method: "POST",
-    });
-
-    const data = await res.json();
-    console.log("payment status", data);
-
-    if (data.status === "paid") {
-      clearInterval(interval);
-      alert(`✅ Payment received!\nTx: ${data.txHash}`);
+      alert("Invoice creation failed");
     }
-
-    if (data.status === "expired") {
-      clearInterval(interval);
-      alert("❌ Payment expired");
-    }
-
-    if (data.error) {
-      clearInterval(interval);
-      alert(`Error: ${data.error}`);
-    }
-  }, 5000);
-};
+  };
   const topSteps = [
     {
       icon: Wallet,
@@ -237,12 +253,12 @@ const pollPayment = async (jobId) => {
       glow: "from-pink-500/30 to-pink-900/10",
     },
     {
-  title: "Create Invoice",
-  desc: "Create blockchain invoice",
-  icon: Wallet,
-  action: () => setInvoiceOpen(true),
-  glow: "from-orange-500/30 to-orange-900/10",
-},
+      title: "Create Invoice",
+      desc: "Create blockchain invoice",
+      icon: Wallet,
+      action: () => setInvoiceOpen(true),
+      glow: "from-orange-500/30 to-orange-900/10",
+    },
   ];
 
   return (
@@ -340,16 +356,16 @@ const pollPayment = async (jobId) => {
         </div>
       </div>
       <InvoiceModal
-  open={invoiceOpen}
-  onClose={() => setInvoiceOpen(false)}
-  onSubmit={createInvoice}
-  wallet={wallet}
-/>
-<VerifyModal
-  open={verifyOpen}
-  onClose={() => setVerifyOpen(false)}
-  onSubmit={accessProtected}
-/>
+        open={invoiceOpen}
+        onClose={() => setInvoiceOpen(false)}
+        onSubmit={createInvoice}
+        wallet={wallet}
+      />
+      <VerifyModal
+        open={verifyOpen}
+        onClose={() => setVerifyOpen(false)}
+        onSubmit={accessProtected}
+      />
     </div>
   );
 }

@@ -8,12 +8,15 @@ import {
   KeyRound,
   ChevronRight,
 } from "lucide-react";
+import InvoiceModal from "./components/InvoiceModel";
+import VerifyModal from "./components/VerifyModal";
 
 export default function AuthWorkerUI() {
   const [wallet, setWallet] = useState("");
   const [nonce, setNonce] = useState("");
   const [token, setToken] = useState("");
-
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
 
   const connectWallet = async () => {
@@ -25,7 +28,7 @@ export default function AuthWorkerUI() {
   };
 
   const getChallenge = async () => {
-    const res = await fetch(`${API_URL}/challenge?address=${wallet}&chainId=1`);
+    const res = await fetch(`${API_URL}/challenge?address=${wallet}`);
     const data = await res.json();
     if (data.error) {
       alert(data.error);
@@ -45,8 +48,7 @@ export default function AuthWorkerUI() {
       body: JSON.stringify({
         address: wallet,
         signature,
-        nonce,
-        chainId: 1,
+        nonce
       }),
     });
 
@@ -60,7 +62,7 @@ export default function AuthWorkerUI() {
     }
   };
 
-const accessProtected = async () => {
+const accessProtected = async (verifyData) => {
   const savedToken = localStorage.getItem("token");
 
   if (!savedToken) {
@@ -68,26 +70,63 @@ const accessProtected = async () => {
     return;
   }
 
-  const res = await fetch(`${API_URL}/protected`, {
-    method: "GET",
+  const res = await fetch(`${API_URL}/verify`, {
+    method: "POST",
     headers: {
+      "Content-Type": "application/json",
       Authorization: `Bearer ${savedToken}`,
     },
+    body: JSON.stringify(verifyData),
   });
 
   const data = await res.json();
 
   if (data.hasMinimumBalance !== undefined) {
-    alert(
-      `Balance: ${data.balance}\nMinimum Required: ${data.minimumRequired}\nAccess: ${
-        data.hasMinimumBalance ? "Granted" : "Denied"
-      }`
-    );
+    alert(`
+Balance: ${data.balance}
+
+Minimum Required: ${data.minimumRequired}
+
+Access: ${data.hasMinimumBalance ? "Granted" : "Denied"}
+`);
   } else {
     alert(data.error || "Failed");
   }
 };
 
+const createInvoice = async (invoiceData) => {
+  const savedToken = localStorage.getItem("token");
+
+  if (!savedToken) {
+    alert("Login first");
+    return;
+  }
+
+  const res = await fetch(`${API_URL}/invoice`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${savedToken}`,
+    },
+    body: JSON.stringify(invoiceData),
+  });
+
+  const data = await res.json();
+
+  if (data.error) {
+    alert(data.error);
+    return;
+  }
+
+  alert(`
+Invoice Created
+
+Job ID: ${data.jobId}
+Cost: ${data.cost}
+`);
+
+  pollPayment(data.jobId);
+};
 
 const createJob = async () => {
   const savedToken = localStorage.getItem("token");
@@ -194,14 +233,14 @@ const pollPayment = async (jobId) => {
       title: "Open Protected Route",
       desc: "Access your protected resources",
       icon: Lock,
-      action: accessProtected,
+      action: () => setVerifyOpen(true),
       glow: "from-pink-500/30 to-pink-900/10",
     },
     {
-  title: "Create Job",
-  desc: "Create payment job session",
+  title: "Create Invoice",
+  desc: "Create blockchain invoice",
   icon: Wallet,
-  action: createJob,
+  action: () => setInvoiceOpen(true),
   glow: "from-orange-500/30 to-orange-900/10",
 },
   ];
@@ -300,6 +339,17 @@ const pollPayment = async (jobId) => {
           </div>
         </div>
       </div>
+      <InvoiceModal
+  open={invoiceOpen}
+  onClose={() => setInvoiceOpen(false)}
+  onSubmit={createInvoice}
+  wallet={wallet}
+/>
+<VerifyModal
+  open={verifyOpen}
+  onClose={() => setVerifyOpen(false)}
+  onSubmit={accessProtected}
+/>
     </div>
   );
 }

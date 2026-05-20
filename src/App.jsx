@@ -14,7 +14,6 @@ import VerifyModal from "./components/VerifyModal";
 export default function AuthWorkerUI() {
   const [wallet, setWallet] = useState("");
   const [nonce, setNonce] = useState("");
-  const [nonceId, setNonceId] = useState("");
   const [token, setToken] = useState("");
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -39,7 +38,6 @@ const getChallenge = async () => {
     }
 
     setNonce(data.nonce);
-    setNonceId(data.nonceId);
   } catch (err) {
     console.error(err);
     alert("Challenge request failed");
@@ -61,7 +59,6 @@ const signAndLogin = async () => {
         address: wallet,
         signature,
         nonce,
-        nonceId,
       }),
     });
 

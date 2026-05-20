@@ -7,6 +7,7 @@ import {
   User,
   KeyRound,
   ChevronRight,
+    Loader2,
 } from "lucide-react";
 import InvoiceModal from "./components/InvoiceModel";
 import VerifyModal from "./components/VerifyModal";
@@ -14,102 +15,139 @@ import VerifyModal from "./components/VerifyModal";
 export default function AuthWorkerUI() {
   const [wallet, setWallet] = useState("");
   const [nonce, setNonce] = useState("");
+  const [currentInvoice, setCurrentInvoice] = useState(null);
+  const [txHash, setTxHash] = useState("");
   const [token, setToken] = useState("");
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
+  const [loading, setLoading] = useState({
+    connect: false,
+    challenge: false,
+    login: false,
+    verify: false,
+    invoice: false,
+    payment: false,
+    receipt: false,
+  });
   const connectWallet = async () => {
-    if (!window.ethereum) return alert("MetaMask not found");
-    const accounts = await window.ethereum.request({
-      method: "eth_requestAccounts",
-    });
-    setWallet(accounts[0]);
+    try {
+      setLoading((prev) => ({ ...prev, connect: true }));
+
+      if (!window.ethereum) {
+        alert("MetaMask not found");
+        return;
+      }
+
+      const accounts = await window.ethereum.request({
+        method: "eth_requestAccounts",
+      });
+
+      setWallet(accounts[0]);
+    } finally {
+      setLoading((prev) => ({ ...prev, connect: false }));
+    }
   };
 
-const getChallenge = async () => {
-  try {
-    const res = await fetch(`${API_URL}/challenge?address=${wallet}`);
+  const getChallenge = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, challenge: true }));
+      const res = await fetch(`${API_URL}/challenge?address=${wallet}`);
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (data.error) {
-      alert(data.error);
-      return;
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      setNonce(data.nonce);
+    } catch (err) {
+      console.error(err);
+      alert("Challenge request failed");
+    } finally {
+      setLoading((prev) => ({ ...prev, challenge: false }));
     }
+  };
+  const signAndLogin = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, login: true }));
+      const signature = await window.ethereum.request({
+        method: "personal_sign",
+        params: [nonce, wallet],
+      });
 
-    setNonce(data.nonce);
-  } catch (err) {
-    console.error(err);
-    alert("Challenge request failed");
-  }
-};
-const signAndLogin = async () => {
-  try {
-    const signature = await window.ethereum.request({
-      method: "personal_sign",
-      params: [nonce, wallet],
-    });
+      const res = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          address: wallet,
+          signature,
+          nonce,
+        }),
+      });
 
-    const res = await fetch(`${API_URL}/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        address: wallet,
-        signature,
-        nonce,
-      }),
-    });
+      const data = await res.json();
 
-    const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
 
-    if (data.error) {
-      alert(data.error);
-      return;
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+        setToken(data.token);
+
+        alert("✅ Login successful");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Login failed");
+    } finally {
+      setLoading((prev) => ({ ...prev, login: false }));
     }
-
-    if (data.token) {
-      localStorage.setItem("token", data.token);
-      setToken(data.token);
-
-      alert("✅ Login successful");
-    }
-  } catch (err) {
-    console.error(err);
-    alert("Login failed");
-  }
-};
+  };
 
   const accessProtected = async (verifyData) => {
-    const savedToken = localStorage.getItem("token");
+    try {
+      setLoading((prev) => ({ ...prev, verify: true }));
 
-    if (!savedToken) {
-      alert("Login first");
-      return;
-    }
+      const savedToken = localStorage.getItem("token");
 
-    const res = await fetch(`${API_URL}/verify`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${savedToken}`,
-      },
-      body: JSON.stringify(verifyData),
-    });
+      if (!savedToken) {
+        alert("Login first");
+        return;
+      }
 
-    const data = await res.json();
+      const res = await fetch(`${API_URL}/verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${savedToken}`,
+        },
+        body: JSON.stringify(verifyData),
+      });
 
-    if (data.hasMinimumBalance !== undefined) {
-      alert(`
+      const data = await res.json();
+
+      if (data.hasMinimumBalance !== undefined) {
+        alert(`
 Balance: ${data.balance}
 
 Minimum Required: ${data.minimumRequired}
 
 Access: ${data.hasMinimumBalance ? "Granted" : "Denied"}
 `);
-    } else {
-      alert(data.error || "Failed");
+      } else {
+        alert(data.error || "Failed");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Verification failed");
+    } finally {
+      setLoading((prev) => ({ ...prev, verify: false }));
     }
   };
 
@@ -179,6 +217,7 @@ ${data.txHash}
     }
 
     try {
+      setLoading((prev) => ({ ...prev, invoice: true }));
       const res = await fetch(`${API_URL}/invoice`, {
         method: "POST",
         headers: {
@@ -189,6 +228,7 @@ ${data.txHash}
       });
 
       const data = await res.json();
+      setCurrentInvoice(data);
 
       if (data.error) {
         alert(data.error);
@@ -210,13 +250,120 @@ ${data.expiresIn}s
 
       // optional
       await checkJobStatus(data.jobId);
-
-      // start payment polling
-      pollPayment(data.jobId);
     } catch (err) {
       console.error(err);
 
       alert("Invoice creation failed");
+    } finally {
+      setLoading((prev) => ({ ...prev, invoice: false }));
+    }
+  };
+
+const makePayment = async () => {
+  try {
+    setLoading((prev) => ({ ...prev, payment: true }));
+
+    if (!currentInvoice) {
+      alert("Create invoice first");
+      return;
+    }
+
+    if (!window.ethereum) {
+      alert("MetaMask not found");
+      return;
+    }
+
+    const accounts = await window.ethereum.request({
+      method: "eth_requestAccounts",
+    });
+
+    const account = accounts[0];
+
+    // ERC20 transfer(address,uint256)
+    const transferMethodId = "0xa9059cbb";
+
+    // clean address
+    const recipient = currentInvoice.payTo.replace(/^0x/, "");
+
+    // 32-byte padded address
+    const paddedAddress = recipient.padStart(64, "0");
+
+    // amount hex
+    const amountHex = BigInt(
+      currentInvoice.costInBaseUnits
+    ).toString(16);
+
+    // 32-byte padded amount
+    const paddedAmount = amountHex.padStart(64, "0");
+
+    // final calldata
+    const dataPayload =
+      transferMethodId +
+      paddedAddress +
+      paddedAmount;
+
+    console.log("dataPayload", dataPayload);
+
+    const hash = await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [
+        {
+          from: account,
+          to: currentInvoice.tokenAddress,
+          data: dataPayload,
+          value: "0x00",
+        },
+      ],
+    });
+
+    setTxHash(hash);
+
+    alert(`✅ Payment Sent
+
+TX HASH:
+${hash}`);
+  } catch (err) {
+    console.error(err);
+    alert("Payment failed");
+  } finally {
+    setLoading((prev) => ({ ...prev, payment: false }));
+  }
+};
+  const getReceipt = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, receipt: true }));
+      if (!currentInvoice?.jobId) {
+        alert("Create invoice first");
+        return;
+      }
+
+      const res = await fetch(`${API_URL}/receipt/${currentInvoice.jobId}`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      console.log("receipt", data);
+
+      if (data.status === "paid") {
+        setTxHash(data.txHash);
+
+        alert(`✅ Payment Verified
+
+TX HASH:
+${data.txHash}`);
+      } else if (data.status === "pending") {
+        alert("⏳ Payment still pending");
+      } else if (data.status === "expired") {
+        alert("❌ Invoice expired");
+      } else {
+        alert(data.error || "Receipt failed");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Receipt fetch failed");
+    } finally {
+      setLoading((prev) => ({ ...prev, receipt: false }));
     }
   };
   const topSteps = [
@@ -278,6 +425,20 @@ ${data.expiresIn}s
       action: () => setInvoiceOpen(true),
       glow: "from-orange-500/30 to-orange-900/10",
     },
+    {
+      title: "Make Payment",
+      desc: "Open MetaMask payment",
+      icon: Wallet,
+      action: makePayment,
+      glow: "from-emerald-500/30 to-emerald-900/10",
+    },
+    {
+      title: "Get Receipt",
+      desc: "Fetch blockchain receipt",
+      icon: Shield,
+      action: getReceipt,
+      glow: "from-cyan-500/30 to-cyan-900/10",
+    },
   ];
 
   return (
@@ -331,10 +492,37 @@ ${data.expiresIn}s
                 <h3 className="text-xl font-semibold mb-3">{card.title}</h3>
                 <p className="text-zinc-400 text-sm mb-6">{card.desc}</p>
 
-                <div className="flex items-center justify-between rounded-xl border border-white/10 px-4 py-3 bg-white/5">
-                  <span>Continue</span>
-                  <ChevronRight size={18} />
-                </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/10 px-4 py-3 bg-white/5">
+  <span>
+    {card.title === "Connect MetaMask" && loading.connect
+      ? "Loading..."
+      : card.title === "Get Challenge" && loading.challenge
+      ? "Loading..."
+      : card.title === "Sign & Login" && loading.login
+      ? "Loading..."
+      : card.title === "Open Protected Route" && loading.verify
+      ? "Verifying..."
+      : card.title === "Create Invoice" && loading.invoice
+      ? "Creating..."
+      : card.title === "Make Payment" && loading.payment
+      ? "Processing..."
+      : card.title === "Get Receipt" && loading.receipt
+      ? "Checking..."
+      : "Continue"}
+  </span>
+
+  {(card.title === "Connect MetaMask" && loading.connect) ||
+  (card.title === "Get Challenge" && loading.challenge) ||
+  (card.title === "Sign & Login" && loading.login) ||
+  (card.title === "Open Protected Route" && loading.verify) ||
+  (card.title === "Create Invoice" && loading.invoice) ||
+  (card.title === "Make Payment" && loading.payment) ||
+  (card.title === "Get Receipt" && loading.receipt) ? (
+    <Loader2 className="animate-spin" size={18} />
+  ) : (
+    <ChevronRight size={18} />
+  )}
+</div>
               </button>
             );
           })}

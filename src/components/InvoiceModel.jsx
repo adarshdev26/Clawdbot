@@ -12,7 +12,7 @@ export default function InvoiceModal({
   const [tokenAddress, setTokenAddress] = useState("");
   const [chainId, setChainId] = useState(1);
   const [payTo, setPayTo] = useState(wallet);
-  const [expiresIn, setExpiresIn] = useState(120);
+  const [expiresIn, setExpiresIn] = useState(600);
 
   if (!open) return null;
 

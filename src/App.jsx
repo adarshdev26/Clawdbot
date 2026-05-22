@@ -273,55 +273,53 @@ const makePayment = async () => {
       return;
     }
 
+    // ── Chain check ──────────────────────────────────────────
+    const currentChainId = await window.ethereum.request({
+      method: "eth_chainId",
+    });
+
+    const requiredChainId = "0x" + parseInt(currentInvoice.chainId).toString(16);
+
+    if (currentChainId !== requiredChainId) {
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: requiredChainId }],
+        });
+      } catch (switchErr) {
+        alert(`Wrong network. Please switch to chainId: ${currentInvoice.chainId}`);
+        return;
+      }
+    }
+    // ─────────────────────────────────────────────────────────
+
     const accounts = await window.ethereum.request({
       method: "eth_requestAccounts",
     });
 
     const account = accounts[0];
 
-    // ERC20 transfer(address,uint256)
     const transferMethodId = "0xa9059cbb";
-
-    // clean address
     const recipient = currentInvoice.payTo.replace(/^0x/, "");
-
-    // 32-byte padded address
     const paddedAddress = recipient.padStart(64, "0");
-
-    // amount hex
-    const amountHex = BigInt(
-      currentInvoice.costInBaseUnits
-    ).toString(16);
-
-    // 32-byte padded amount
+    const amountHex = BigInt(currentInvoice.costInBaseUnits).toString(16);
     const paddedAmount = amountHex.padStart(64, "0");
-
-    // final calldata
-    const dataPayload =
-      transferMethodId +
-      paddedAddress +
-      paddedAmount;
-
-    console.log("dataPayload", dataPayload);
+    const dataPayload = transferMethodId + paddedAddress + paddedAmount;
 
     const hash = await window.ethereum.request({
       method: "eth_sendTransaction",
-      params: [
-        {
-          from: account,
-          to: currentInvoice.tokenAddress,
-          data: dataPayload,
-          value: "0x00",
-        },
-      ],
+      params: [{
+        from: account,
+        to: currentInvoice.tokenAddress,
+        data: dataPayload,
+        value: "0x00",
+        gas: "0x15F90",
+      }],
     });
 
     setTxHash(hash);
+    alert(`✅ Payment Sent\n\nTX HASH:\n${hash}`);
 
-    alert(`✅ Payment Sent
-
-TX HASH:
-${hash}`);
   } catch (err) {
     console.error(err);
     alert("Payment failed");
